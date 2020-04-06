@@ -1,6 +1,8 @@
 ﻿using Hardcodet.Wpf.TaskbarNotification;
+using System;
 using System.Drawing;
 using System.Windows;
+using System.Windows.Input;
 
 namespace MicIcon
 {
@@ -11,9 +13,6 @@ namespace MicIcon
     {
         public App()
         {
-            TaskbarIcon tbi = new TaskbarIcon();
-            tbi.Icon = new Icon(SystemIcons.Exclamation, 40, 40);
-            tbi.ToolTipText = "hello world";
         }
     }
 }
