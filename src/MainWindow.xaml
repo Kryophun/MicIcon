@@ -7,6 +7,11 @@
         mc:Ignorable="d"
         Title="MainWindow" Height="450" Width="800">
     <Grid>
-        
+        <ComboBox
+            Name="inputDevicesComboBox"
+            IsEditable="false"
+            Height="25"
+            Width="400"
+        />
     </Grid>
 </Window>
