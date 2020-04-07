@@ -1,7 +1,9 @@
 ﻿using Hardcodet.Wpf.TaskbarNotification;
 using NAudio.CoreAudioApi;
+using NAudio.CoreAudioApi.Interfaces;
 using System;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using System.Drawing;
 using System.IO;
 using System.Windows;
@@ -18,13 +20,15 @@ namespace MicIcon
     public partial class MainWindow : Window
     {
         private readonly List<MMDevice> inputDevices = new List<MMDevice>();
-        private readonly List<string> inputDeviceNames = new List<string>();
+        private readonly ObservableCollection<string> inputDeviceNames = new ObservableCollection<string>();
         private MMDevice selectedInputDevice;
 
         private Icon unmutedIcon;
         private Icon mutedIcon;
 
         TaskbarIcon tbi = new TaskbarIcon();
+
+        IMMNotificationClient notificationClient;
 
         public MainWindow()
         {
@@ -47,6 +51,17 @@ namespace MicIcon
             inputDevicesComboBox.ItemsSource = inputDeviceNames;
             inputDevicesComboBox.SelectionChanged += InputDevicesComboBox_SelectionChanged;
 
+            notificationClient = new DeviceChangedClient(new Action(() =>
+            {
+                Application.Current.Dispatcher.Invoke(new Action(() =>
+                {
+                    RefreshDeviceList("");
+                }));
+            }));
+
+            var deviceEnumerator = new MMDeviceEnumerator();
+            deviceEnumerator.RegisterEndpointNotificationCallback(notificationClient);
+
             RefreshDeviceList(Properties.Settings.Default.LastDeviceName);
 
             Console.WriteLine($"Selected index: {inputDevicesComboBox.SelectedIndex}");
@@ -54,6 +69,15 @@ namespace MicIcon
 
         private void RefreshDeviceList(string preferredSelectedDeviceFriendlyName)
         {
+            string deviceToSelectIfPossible = preferredSelectedDeviceFriendlyName;
+
+            if (inputDevicesComboBox.SelectedIndex != -1)
+            {
+                deviceToSelectIfPossible = inputDevices[inputDevicesComboBox.SelectedIndex].DeviceFriendlyName;
+            }
+
+            inputDevices.Clear();
+            inputDeviceNames.Clear();
             var deviceEnumerator = new MMDeviceEnumerator();
             foreach (var device in deviceEnumerator.EnumerateAudioEndPoints(DataFlow.Capture, DeviceState.Active))
             {
@@ -62,19 +86,19 @@ namespace MicIcon
                 inputDeviceNames.Add(device.DeviceFriendlyName);
             }
 
-            if (inputDevicesComboBox.SelectedIndex == -1)
+            if (!string.IsNullOrWhiteSpace(deviceToSelectIfPossible))
             {
-                if (!string.IsNullOrWhiteSpace(preferredSelectedDeviceFriendlyName))
+                int foundIndex = inputDeviceNames.IndexOf(deviceToSelectIfPossible);
+                if (foundIndex >= 0)
                 {
-                    int foundIndex = inputDeviceNames.FindIndex((string possibleMatch) => possibleMatch == preferredSelectedDeviceFriendlyName);
-                    if (foundIndex >= 0)
+                    if (inputDevicesComboBox.SelectedIndex != foundIndex)
                     {
                         inputDevicesComboBox.SelectedIndex = foundIndex;
                     }
-                } else if (inputDeviceNames.Count > 0)
-                {
-                    inputDevicesComboBox.SelectedIndex = 0;
                 }
+            } else if (inputDeviceNames.Count > 0)
+            {
+                inputDevicesComboBox.SelectedIndex = 0;
             }
         }
 
@@ -143,4 +167,54 @@ namespace MicIcon
         private Window window;
     }
 
+    internal class DeviceChangedClient : IMMNotificationClient
+    {
+        private Action _onDeviceAddedOrRemoved;
+
+        internal DeviceChangedClient(Action onDeviceAddedOrRemoved)
+        {
+            _onDeviceAddedOrRemoved = onDeviceAddedOrRemoved;
+        }
+
+        //
+        // Summary:
+        //     Default Device Changed
+        public void OnDefaultDeviceChanged(DataFlow flow, Role role, string defaultDeviceId)
+        {
+
+        }
+        //
+        // Summary:
+        //     Device Added
+        public void OnDeviceAdded(string pwstrDeviceId)
+        {
+            _onDeviceAddedOrRemoved();
+        }
+        //
+        // Summary:
+        //     Device Removed
+        public void OnDeviceRemoved(string deviceId)
+        {
+            _onDeviceAddedOrRemoved();
+        }
+        //
+        // Summary:
+        //     Device State Changed
+        public void OnDeviceStateChanged(string deviceId, DeviceState newState)
+        {
+            _onDeviceAddedOrRemoved();
+        }
+        //
+        // Summary:
+        //     Property Value Changed
+        //
+        // Parameters:
+        //   pwstrDeviceId:
+        //
+        //   key:
+        public void OnPropertyValueChanged(string pwstrDeviceId, PropertyKey key)
+        {
+
+        }
+    }
 }
