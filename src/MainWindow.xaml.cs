@@ -1,13 +1,14 @@
 ﻿using Hardcodet.Wpf.TaskbarNotification;
 using NAudio.CoreAudioApi;
-using NAudio.Wave;
 using System;
 using System.Collections.Generic;
-using System.Collections.ObjectModel;
 using System.Drawing;
+using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+
+// TODO: Save preferred device across runs
 
 namespace MicIcon
 {
@@ -16,13 +17,14 @@ namespace MicIcon
     /// </summary>
     public partial class MainWindow : Window
     {
-        //private NAudio.CoreAudioApi.MMDeviceEnumerator deviceEnum = new NAudio.CoreAudioApi.MMDeviceEnumerator();
-        //private NotificationClientImplementation notificationClient;
-        //private NAudio.CoreAudioApi.Interfaces.IMMNotificationClient notifyClient;
-
-        private List<MMDevice> inputDevices = new List<MMDevice>();
-        private List<string> inputDeviceNames = new List<string>();
+        private readonly List<MMDevice> inputDevices = new List<MMDevice>();
+        private readonly List<string> inputDeviceNames = new List<string>();
         private MMDevice selectedInputDevice;
+
+        private Icon unmutedIcon;
+        private Icon mutedIcon;
+
+        TaskbarIcon tbi = new TaskbarIcon();
 
         public MainWindow()
         {
@@ -31,24 +33,26 @@ namespace MicIcon
 
             DataContext = this;
 
-            TaskbarIcon tbi = new TaskbarIcon();
-            tbi.Icon = new Icon(SystemIcons.Exclamation, 40, 40);
-            tbi.ToolTipText = "hello world";
+            using (Stream stream = Application.GetResourceStream(new Uri("/mic.ico", UriKind.Relative)).Stream)
+            {
+                unmutedIcon = new Icon(stream);
+            }
+            using (Stream stream = Application.GetResourceStream(new Uri("/mutedmic.ico", UriKind.Relative)).Stream)
+            {
+                mutedIcon = new Icon(stream);
+            }
+
             tbi.LeftClickCommand = new ShowMessageCommand(this);
 
             inputDevicesComboBox.ItemsSource = inputDeviceNames;
             inputDevicesComboBox.SelectionChanged += InputDevicesComboBox_SelectionChanged;
 
-            refreshDeviceList();
+            RefreshDeviceList(Properties.Settings.Default.LastDeviceName);
 
             Console.WriteLine($"Selected index: {inputDevicesComboBox.SelectedIndex}");
-
-            //notificationClient = new NotificationClientImplementation();
-            //notifyClient = (NAudio.CoreAudioApi.Interfaces.IMMNotificationClient)notificationClient;
-            //deviceEnum.RegisterEndpointNotificationCallback(notifyClient);
         }
 
-        private void refreshDeviceList()
+        private void RefreshDeviceList(string preferredSelectedDeviceFriendlyName)
         {
             var deviceEnumerator = new MMDeviceEnumerator();
             foreach (var device in deviceEnumerator.EnumerateAudioEndPoints(DataFlow.Capture, DeviceState.Active))
@@ -58,27 +62,53 @@ namespace MicIcon
                 inputDeviceNames.Add(device.DeviceFriendlyName);
             }
 
-            if (inputDevicesComboBox.SelectedIndex == -1 && inputDeviceNames.Count > 0)
+            if (inputDevicesComboBox.SelectedIndex == -1)
             {
-                inputDevicesComboBox.SelectedIndex = 0;
+                if (!string.IsNullOrWhiteSpace(preferredSelectedDeviceFriendlyName))
+                {
+                    int foundIndex = inputDeviceNames.FindIndex((string possibleMatch) => possibleMatch == preferredSelectedDeviceFriendlyName);
+                    if (foundIndex >= 0)
+                    {
+                        inputDevicesComboBox.SelectedIndex = foundIndex;
+                    }
+                } else if (inputDeviceNames.Count > 0)
+                {
+                    inputDevicesComboBox.SelectedIndex = 0;
+                }
             }
-
         }
 
         private void InputDevicesComboBox_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
         {
+            if (selectedInputDevice != null)
+            {
+                selectedInputDevice.AudioEndpointVolume.OnVolumeNotification -= AudioEndpointVolume_OnVolumeNotification;
+            }
+
             int selectedIndex = ((ComboBox)e.Source).SelectedIndex;
             if (selectedIndex >= 0)
             {
                 Console.WriteLine($"Hello {selectedIndex}");
                 selectedInputDevice = inputDevices[selectedIndex];
+                selectedInputDevice.AudioEndpointVolume.OnVolumeNotification += AudioEndpointVolume_OnVolumeNotification;
                 RefreshIconWithMuteState();
+                Properties.Settings.Default.LastDeviceName = selectedInputDevice.DeviceFriendlyName;
+                Properties.Settings.Default.Save();
             }
+        }
+
+        private void AudioEndpointVolume_OnVolumeNotification(AudioVolumeNotificationData data)
+        {
+            RefreshIconWithMuteState();
         }
 
         private void RefreshIconWithMuteState()
         {
-            Console.WriteLine($"Is muted? {selectedInputDevice.AudioEndpointVolume.Mute}");
+            Console.WriteLine($"IS MUTED? {selectedInputDevice.AudioEndpointVolume.Mute}");
+            Application.Current.Dispatcher.Invoke(new Action(() => {
+                tbi.Icon = selectedInputDevice.AudioEndpointVolume.Mute ? mutedIcon : unmutedIcon;
+                tbi.ToolTipText = selectedInputDevice.FriendlyName + " is " + (selectedInputDevice.AudioEndpointVolume.Mute ? "" : "NOT ") + "muted";
+            }));
         }
 
         private void MainWindow_StateChanged(object sender, EventArgs e)
@@ -113,48 +143,4 @@ namespace MicIcon
         private Window window;
     }
 
-    //class NotificationClientImplementation : NAudio.CoreAudioApi.Interfaces.IMMNotificationClient
-    //{
-    //    public void OnDefaultDeviceChanged(DataFlow dataFlow, Role deviceRole, string defaultDeviceId)
-    //    {
-    //        //Do some Work
-    //        Console.WriteLine("OnDefaultDeviceChanged --> {0}", dataFlow.ToString());
-    //    }
-
-    //    public void OnDeviceAdded(string deviceId)
-    //    {
-    //        //Do some Work
-    //        Console.WriteLine("OnDeviceAdded -->");
-    //    }
-
-    //    public void OnDeviceRemoved(string deviceId)
-    //    {
-
-    //        Console.WriteLine("OnDeviceRemoved -->");
-    //        //Do some Work
-    //    }
-
-    //    public void OnDeviceStateChanged(string deviceId, DeviceState newState)
-    //    {
-    //        Console.WriteLine("OnDeviceStateChanged\n Device Id -->{0} : Device State {1}", deviceId, newState);
-    //        MessageBox.Show("Hello!");
-    //        //Do some Work
-    //    }
-
-    //    public NotificationClientImplementation()
-    //    {
-    //        //_realEnumerator.RegisterEndpointNotificationCallback();
-    //        if (System.Environment.OSVersion.Version.Major < 6)
-    //        {
-    //            throw new NotSupportedException("This functionality is only supported on Windows Vista or newer.");
-    //        }
-    //    }
-
-    //    public void OnPropertyValueChanged(string deviceId, PropertyKey propertyKey)
-    //    {
-    //        //Do some Work
-    //        //fmtid & pid are changed to formatId and propertyId in the latest version NAudio
-    //        Console.WriteLine("OnPropertyValueChanged: formatId --> {0}  propertyId --> {1}", propertyKey.formatId.ToString(), propertyKey.propertyId.ToString());
-    //    }
-    //}
 }
