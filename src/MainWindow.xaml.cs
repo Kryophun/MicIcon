@@ -46,7 +46,7 @@ namespace MicIcon
                 mutedIcon = new Icon(stream);
             }
 
-            tbi.LeftClickCommand = new ShowMessageCommand(this);
+            tbi.LeftClickCommand = new ShowMessageCommand(ShowWindow);
 
             var showUiMenuItem = new MenuItem();
             showUiMenuItem.Header = "Show UI";
@@ -175,16 +175,14 @@ namespace MicIcon
 
     public class ShowMessageCommand : ICommand
     {
-        public ShowMessageCommand(Window window)
+        public ShowMessageCommand(Action action)
         {
-            this.window = window;
+            this.action = action;
         }
 
         public void Execute(object parameter)
         {
-            window.Visibility = Visibility.Visible;
-            window.WindowState = WindowState.Normal;
-            window.Activate();
+            action();
         }
 
         public bool CanExecute(object parameter)
@@ -193,7 +191,7 @@ namespace MicIcon
         }
 
         public event EventHandler CanExecuteChanged;
-        private Window window;
+        private readonly Action action;
     }
 
     internal class DeviceChangedClient : IMMNotificationClient
