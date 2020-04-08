@@ -48,6 +48,18 @@ namespace MicIcon
 
             tbi.LeftClickCommand = new ShowMessageCommand(this);
 
+            var showUiMenuItem = new MenuItem();
+            showUiMenuItem.Header = "Show UI";
+            showUiMenuItem.Click += ShowUiMenuItem_Click;
+
+            var exitMenuItem = new MenuItem();
+            exitMenuItem.Header = "Exit";
+            exitMenuItem.Click += ExitMenuItem_Click;
+
+            tbi.ContextMenu = new ContextMenu();
+            tbi.ContextMenu.Items.Add(showUiMenuItem);
+            tbi.ContextMenu.Items.Add(exitMenuItem);
+
             inputDevicesComboBox.ItemsSource = inputDeviceNames;
             inputDevicesComboBox.SelectionChanged += InputDevicesComboBox_SelectionChanged;
 
@@ -65,6 +77,16 @@ namespace MicIcon
             RefreshDeviceList(Properties.Settings.Default.LastDeviceName);
 
             Console.WriteLine($"Selected index: {inputDevicesComboBox.SelectedIndex}");
+        }
+
+        private void ShowUiMenuItem_Click(object sender, RoutedEventArgs e)
+        {
+            ShowWindow();
+        }
+
+        private void ExitMenuItem_Click(object sender, RoutedEventArgs e)
+        {
+            Application.Current.Shutdown();
         }
 
         private void RefreshDeviceList(string preferredSelectedDeviceFriendlyName)
@@ -137,10 +159,17 @@ namespace MicIcon
 
         private void MainWindow_StateChanged(object sender, EventArgs e)
         {
-            if (this.WindowState == WindowState.Minimized)
+            if (WindowState == WindowState.Minimized)
             {
-                this.Visibility = Visibility.Hidden;
+                Visibility = Visibility.Hidden;
             }
+        }
+
+        private void ShowWindow()
+        {
+            Visibility = Visibility.Visible;
+            WindowState = WindowState.Normal;
+            Activate();
         }
     }
 
